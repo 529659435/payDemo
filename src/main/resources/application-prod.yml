@@ -1,0 +1,15 @@
+server:
+ servlet:
+  context-path: /boy 
+ port: 8089
+
+cupSize: C 
+name: \u738B\u7F8E\u4E3D 
+age: 20 
+
+content: "name: ${name} age: ${age} cupSize: ${cupSize0}" 
+
+girl:
+ name: \u5A1C\u7F8E 
+ age: 18 
+ cupsize: g 
