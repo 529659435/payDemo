@@ -15,6 +15,7 @@ import com.alipay.api.domain.TradeFundBill;
 import com.alipay.api.response.AlipayTradePayResponse;
 import com.alipay.api.response.AlipayTradePrecreateResponse;
 import com.alipay.api.response.AlipayTradeQueryResponse;
+import com.alipay.api.response.AlipayTradeRefundResponse;
 import com.alipay.demo.trade.config.Configs;
 import com.alipay.demo.trade.model.ExtendParams;
 import com.alipay.demo.trade.model.GoodsDetail;
@@ -35,7 +36,6 @@ import com.alipay.demo.trade.utils.Utils;
 import com.alipay.demo.trade.utils.ZxingUtils;
 import com.example.bean.AlPayInfo;
 import com.example.bean.QrPayInfo;
-import com.example.bean.RefundInfo;
 import com.example.demo.DemoHbRunner;
 import com.example.payDemo.service.AlPayService;
 import org.apache.commons.lang.StringUtils;
@@ -43,7 +43,6 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
 import java.io.File;
@@ -102,33 +101,32 @@ public class AliPayServiceImpl implements AlPayService {
     }
 
     // 时间格式转换
-    private String timeResponse(String time) {
-        Date date = new Date(time);
-        SimpleDateFormat dateformat1 = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-        return dateformat1.format(date);
+    private String timeResponse(Date time) {
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+        return sdf.format(time);
     }
 
 
     //交易退款
     @Override
-    public RefundInfo tradeRefund( Map<String, String> refund) {
+    public Map<String, String> tradeRefund(Map<String, String> refund) {
         Map<String, String> refundBill = new HashMap<>();
 
         // (必填) 外部订单号，需要退款交易的商户外部订单号
-        String outTradeNo = "tradepay14817938139942440181";
+        String outTradeNo = refund.get("outTradeNo");
 
         // (必填) 退款金额，该金额必须小于等于订单的支付金额，单位为元
-        String refundAmount = "0.01";
+        String refundAmount = refund.get("refundAmount");
 
         // (可选，需要支持重复退货时必填) 商户退款请求号，相同支付宝交易号下的不同退款请求号对应同一笔交易的不同退款申请，
         // 对于相同支付宝交易号下多笔相同商户退款请求号的退款交易，支付宝只会进行一次退款
         String outRequestNo = "";
 
         // (必填) 退款原因，可以说明用户退款原因，方便为商家后台提供统计
-        String refundReason = "正常退款，用户买多了";
+        String refundReason = refund.get("refundReason");
 
         // (必填) 商户门店编号，退款情况下可以为商家后台提供退款权限判定和统计等作用，详询支付宝技术支持
-        String storeId = "test_store_id";
+        String storeId = refund.get("storeId");
 
         // 创建退款请求builder，设置请求参数
         AlipayTradeRefundRequestBuilder builder = new AlipayTradeRefundRequestBuilder()
@@ -136,24 +134,38 @@ public class AliPayServiceImpl implements AlPayService {
                 .setOutRequestNo(outRequestNo).setStoreId(storeId);
 
         AlipayF2FRefundResult result = tradeService.tradeRefund(builder);
+        AlipayTradeRefundResponse response = result.getResponse();
+        refundBill.put("result_code", response.getCode());
+        //当code报错时返回错误原因
+        refundBill.put("return_msg", response.getMsg());
+        //错误代码
+        refundBill.put("err_code", response.getSubCode());
+        //错误消息
+        refundBill.put("err_code_des", response.getSubMsg());
+        refundBill.put("trade_state", "2");
         switch (result.getTradeStatus()) {
             case SUCCESS:
                 log.info("支付宝退款成功: )");
+                refundBill.put("trade_state", "0");
+                refundBill.put("trade_state_desc", "支付宝退款成功: )");
                 break;
 
             case FAILED:
                 log.error("支付宝退款失败!!!");
+                refundBill.put("trade_state_desc", "支付宝退款失败!!!");
                 break;
 
             case UNKNOWN:
                 log.error("系统异常，订单退款状态未知!!!");
+                refundBill.put("trade_state_desc", "系统异常，订单退款状态未知!!!");
                 break;
 
             default:
                 log.error("不支持的交易状态，交易返回异常!!!");
+                refundBill.put("trade_state_desc", "不支持的交易状态，交易返回异常!!!");
                 break;
         }
-        return null;
+        return refundBill;
     }
 
     //查询订单
@@ -192,8 +204,7 @@ public class AliPayServiceImpl implements AlPayService {
                 treadeMap.put("trade_no", response.getTradeNo());
                 treadeMap.put("out_trade_no", response.getOutTradeNo());
                 //时间格式转换
-                String time = String.valueOf(response.getSendPayDate());
-                treadeMap.put("send_pay_date", timeResponse(time));
+                treadeMap.put("send_pay_date", timeResponse(response.getSendPayDate()));
                 log.info(response.getTradeStatus());
                 if (Utils.isListNotEmpty(response.getFundBillList())) {
                     for (TradeFundBill bill : response.getFundBillList()) {
@@ -226,15 +237,7 @@ public class AliPayServiceImpl implements AlPayService {
         // 需保证商户系统端不能重复，建议通过数据库sequence生成，
 
         String outTradeNo = payInfo.getOutTradeNo();
-    /*    Map <String ,String> findTrade =   tradeQuery(outTradeNo);
-        String errCode = findTrade.get("code");*/
- /*       if(!errCode.equals("10000") ){
-            logger.error("订单不存在!!!");
-            payInfo.setValidateResult(2);
-            return payInfo;
-        }*/
-
-       /* String outTradeNo = "tradepay" + System.currentTimeMillis()
+        /* String outTradeNo = "tradepay" + System.currentTimeMillis()
                 + (long) (Math.random() * 10000000L);*/
 
         // (必填) 订单标题，粗略描述用户的支付目的。如“xxx品牌xxx门店消费”
@@ -243,11 +246,6 @@ public class AliPayServiceImpl implements AlPayService {
         // (必填) 订单总金额，单位为元，不能超过1亿元
         // 如果同时传入了【打折金额】,【不可打折金额】,【订单总金额】三者,则必须满足如下条件:【订单总金额】=【打折金额】+【不可打折金额】
         String totalAmount = payInfo.getTotalFee().toString();
-       /* if (!totalAmount.equals(findTrade.get("total_amount").toString())) {
-            logger.error("支付金额与订单金额不符!!!");
-            payInfo.setValidateResult(2);
-            return payInfo;
-        }*/
 
         // (必填) 付款条码，用户支付宝钱包手机app点击“付款”产生的付款条码
         String authCode = payInfo.getAuthCode(); // 条码示例，286648048691290423
@@ -316,73 +314,77 @@ public class AliPayServiceImpl implements AlPayService {
                 //支付宝服务器主动通知商户服务器里指定的页面http路径,根据需要设置
                 // .setNotifyUrl("http://www.test-notify-url.com")
                 .setGoodsDetailList(goodsDetailList).setTimeoutExpress(timeoutExpress);
-            // 调用tradePay方法获取当面付应答
-            AlipayF2FPayResult result = tradeService.tradePay(builder);
-            AlipayResponse response = result.getResponse();
-            //打印日志
-            dumpResponse(response);
-            //返回结果集
-            Map<String, String> resposeMap = new HashMap<>();
-            //返回代码
-            resposeMap.put("result_code", response.getCode());
-            //当code报错时返回错误原因
-            resposeMap.put("return_msg", response.getMsg());
-            resposeMap.put("sub_mch_id", payInfo.getSubMchId());
-            //错误代码
-            resposeMap.put("err_code", response.getSubCode());
-            //错误消息
-            resposeMap.put("err_code_des", response.getSubMsg());
-            //货币类型
-            resposeMap.put("fee_type", payInfo.getFeeType());
-            //现金支付货币类型
-            resposeMap.put("cash_fee_type", payInfo.getFeeType());
-            //交易金额
-            resposeMap.put("total_fee", payInfo.getTotalFee().toString());
-            //商家数据包返回商家标题
-            resposeMap.put("attach", payInfo.getProductTitle());
-            //设备信息
-            resposeMap.put("device_info", payInfo.getDevId());
-            //商户订单号
-            resposeMap.put("out_trade_no", payInfo.getOutTradeNo());
-            //应结订单金额
-            resposeMap.put("settlement_total_fee", payInfo.getFeeType());
-            //交易类型-条码支付
-            resposeMap.put("trade_type", "bar_code");
-            resposeMap.put("trade_state", "2");
-            switch (result.getTradeStatus()) {
-                case SUCCESS:
-                    logger.info("支付宝支付成功");
-                    //用户ID
-                    resposeMap.put("openid", ((AlipayTradePayResponse) response).getBuyerUserId());
-                    //买家实付金额
-                    resposeMap.put("cash_fee", ((AlipayTradePayResponse) response).getBuyerPayAmount());
-                    //支付完成时间
-                    resposeMap.put("time_end", timeResponse(((AlipayTradePayResponse) response).getGmtPayment().toString()));
-                    //支付订单-返回支付宝流水号
-                    resposeMap.put("transaction_id", ((AlipayTradePayResponse) response).getTradeNo());
-                    //付款方式
-                    resposeMap.put("bank_type", ((AlipayTradePayResponse) response).getFundBillList().get(0).getFundChannel());
-                    //验证结果（0：成功，1：已验证，2：失败）如验证结果为失败、以下字段为空
-                    resposeMap.put("trade_state", "0");
-                    resposeMap.put("trade_state_desc", "支付宝支付成功");
-                    break;
-                case FAILED:
-                    logger.error("支付宝支付失败!!!");
-                    resposeMap.put("trade_state_desc", "支付宝支付失败!!!");
-                    break;
+        // 调用tradePay方法获取当面付应答
+        AlipayF2FPayResult result = tradeService.tradePay(builder);
+        AlipayResponse response = result.getResponse();
+        //打印日志
+        dumpResponse(response);
+        //返回结果集
+        Map<String, String> resposeMap = new HashMap<>();
+        //返回代码
+        resposeMap.put("result_code", response.getCode());
+        //当code报错时返回错误原因
+        resposeMap.put("return_msg", response.getMsg());
+        //错误代码
+        resposeMap.put("err_code", response.getSubCode());
+        //错误消息
+        resposeMap.put("err_code_des", response.getSubMsg());
+        resposeMap.put("sub_mch_id", payInfo.getSubMchId());
+        //货币类型
+        resposeMap.put("fee_type", payInfo.getFeeType());
+        //现金支付货币类型
+        resposeMap.put("cash_fee_type", payInfo.getFeeType());
+        //交易金额
+        resposeMap.put("total_fee", payInfo.getTotalFee().toString());
+        //商家数据包返回商家标题
+        resposeMap.put("attach", payInfo.getProductTitle());
+        //设备信息
+        resposeMap.put("device_info", payInfo.getDevId());
+        //商户订单号
+        resposeMap.put("out_trade_no", payInfo.getOutTradeNo());
+        //应结订单金额
+        resposeMap.put("settlement_total_fee", payInfo.getFeeType());
+        //交易类型-条码支付
+        resposeMap.put("trade_type", "bar_code");
+        resposeMap.put("trade_state", "2");
+        switch (result.getTradeStatus()) {
+            case SUCCESS:
+                logger.info("支付宝支付成功");
+                //用户ID
+                resposeMap.put("openid", ((AlipayTradePayResponse) response).getBuyerUserId());
+                //买家实付金额
+                resposeMap.put("cash_fee", ((AlipayTradePayResponse) response).getBuyerPayAmount());
+                //支付完成时间-通过查询订单获取
+                //Map<String,String>as =  tradeQuery(payInfo.getOutTradeNo());
+                //  logger.info("支付时间，"+as.get("send_pay_date"));
+                // logger.info("支付时间2，"+((AlipayTradePayResponse) response).getGmtPayment());
+                //logger.info("支付时间3，"+timeResponse(((AlipayTradePayResponse) response).getGmtPayment()));
+                resposeMap.put("time_end", timeResponse(((AlipayTradePayResponse) response).getGmtPayment()));
+                //支付订单-返回支付宝流水号
+                resposeMap.put("transaction_id", ((AlipayTradePayResponse) response).getTradeNo());
+                //付款方式
+                resposeMap.put("bank_type", ((AlipayTradePayResponse) response).getFundBillList().get(0).getFundChannel());
+                //验证结果（0：成功，1：已验证，2：失败）如验证结果为失败、以下字段为空
+                resposeMap.put("trade_state", "0");
+                resposeMap.put("trade_state_desc", "支付宝支付成功");
+                break;
+            case FAILED:
+                logger.error("支付宝支付失败!!!");
+                resposeMap.put("trade_state_desc", "支付宝支付失败!!!");
+                break;
 
-                case UNKNOWN:
-                    logger.error("系统异常，订单状态未知!!!");
-                    resposeMap.put("trade_state_desc", "系统异常，订单状态未知!!!");
-                    break;
+            case UNKNOWN:
+                logger.error("系统异常，订单状态未知!!!");
+                resposeMap.put("trade_state_desc", "系统异常，订单状态未知!!!");
+                break;
 
-                default:
-                    logger.error("不支持的交易状态，交易返回异常!!!");
-                    resposeMap.put("trade_state_desc", "不支持的交易状态，交易返回异常!!!");
-                    break;
-            }
-            logger.info("返回payInfo" + payInfo, toString());
-            return resposeMap;
+            default:
+                logger.error("不支持的交易状态，交易返回异常!!!");
+                resposeMap.put("trade_state_desc", "不支持的交易状态，交易返回异常!!!");
+                break;
+        }
+        logger.info("返回payInfo" + resposeMap.toString());
+        return resposeMap;
     }
 
     //生成二维码支付
@@ -391,19 +393,20 @@ public class AliPayServiceImpl implements AlPayService {
 
         // (必填) 商户网站订单系统中唯一订单号，64个字符以内，只能包含字母、数字、下划线，
         // 需保证商户系统端不能重复，建议通过数据库sequence生成，
-        //String outTradeNo = qrPayInfo.getOutTradeNo();
-        String outTradeNo = "tradeprecreate" + System.currentTimeMillis()
-                + (long) (Math.random() * 10000000L);
+        String outTradeNo = qrPayInfo.getOutTradeNo();
+    /*    String outTradeNo = "tradeprecreate" + System.currentTimeMillis()
+                + (long) (Math.random() * 10000000L);*/
+
         // (必填) 订单标题，粗略描述用户的支付目的。如“xxx品牌xxx门店当面付扫码消费”
         String subject = qrPayInfo.getSubject();//"xxx品牌xxx门店当面付扫码消费";
 
         // (必填) 订单总金额，单位为元，不能超过1亿元
         // 如果同时传入了【打折金额】,【不可打折金额】,【订单总金额】三者,则必须满足如下条件:【订单总金额】=【打折金额】+【不可打折金额】
-        String totalAmount = "200";// qrPayInfo.getTotalAmount().toString();
+        String totalAmount = qrPayInfo.getTotalAmount().toString();
 
         // (可选) 订单不可打折金额，可以配合商家平台配置折扣活动，如果酒水不参与打折，则将对应金额填写至此字段
         // 如果该值未传入,但传入了【订单总金额】,【打折金额】,则该值默认为【订单总金额】-【打折金额】
-        String undiscountableAmount = "0";//qrPayInfo.getUndiscountableAmount().toString();
+        String undiscountableAmount = qrPayInfo.getUndiscountableAmount().toString();
 
         // 卖家支付宝账号ID，用于支持一个签约账号下支持打款到不同的收款账号，(打款到sellerId对应的支付宝账号)
         // 如果该字段为空，则默认为与支付宝签约的商户的PID，也就是appid对应的PID
@@ -422,8 +425,7 @@ public class AliPayServiceImpl implements AlPayService {
 
         // 业务扩展参数，目前可添加由支付宝分配的系统商编号(通过setSysServiceProviderId方法)，详情请咨询支付宝技术支持
         ExtendParams extendParams = new ExtendParams();
-        extendParams.setSysServiceProviderId("2088100200300400500");
-        // "qrPayInfo.getSetSysServiceProviderId()
+        extendParams.setSysServiceProviderId(qrPayInfo.getSetSysServiceProviderId());
 
         // 支付超时，定义为120分钟
         String timeoutExpress = qrPayInfo.getTimeoutExpress();
@@ -446,16 +448,23 @@ public class AliPayServiceImpl implements AlPayService {
                 .setOperatorId(operatorId).setStoreId(storeId).setExtendParams(extendParams)
                 .setTimeoutExpress(timeoutExpress)
                 // 支付宝服务器主动通知商户服务器里指定的页面http路径,根据需要设置
-                //.setNotifyUrl("http://www.test-notify-url.com")
-                //.setNotifyUrl("http://www.baidu.com")
+                //.setNotifyUrl("http://www.test-notify-url.com"
                 .setGoodsDetailList(goodsDetailList);
-
         AlipayF2FPrecreateResult result = tradeService.tradePrecreate(builder);
+        AlipayTradePrecreateResponse response = result.getResponse();
+
+        qrPayInfo.setErr_code(response.getSubCode());
+        qrPayInfo.setErr_code_des(response.getSubMsg());
+        qrPayInfo.setResult_code(response.getCode());
+        qrPayInfo.setReturn_msg(response.getMsg());
+        qrPayInfo.setTrade_state("2");
+
         switch (result.getTradeStatus()) {
             case SUCCESS:
                 log.info("支付宝预下单成功: )");
-                AlipayTradePrecreateResponse response = result.getResponse();
                 dumpResponse(response);
+                qrPayInfo.setTrade_state("0");
+                qrPayInfo.setTrade_state_desc("支付宝预下单成功: )");
                 // 创建本地上传图片的文件夹，不存在则创建
                 File folder = new File(path);
                 if (!folder.exists()) {
@@ -491,17 +500,20 @@ public class AliPayServiceImpl implements AlPayService {
                 break;
             case FAILED:
                 log.error("支付宝预下单失败!!!");
+                qrPayInfo.setTrade_state_desc("支付宝预下单失败!!!");
                 break;
 
             case UNKNOWN:
                 log.error("系统异常，预下单状态未知!!!");
+                qrPayInfo.setTrade_state_desc("系统异常，预下单状态未知!!!");
                 break;
 
             default:
                 log.error("不支持的交易状态，交易返回异常!!!");
+                qrPayInfo.setTrade_state_desc("不支持的交易状态，交易返回异常!!!");
                 break;
         }
-        return null;
+        return qrPayInfo;
     }
 
 

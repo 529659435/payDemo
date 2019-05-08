@@ -13,6 +13,7 @@ package com.example.bean;
 import com.fasterxml.jackson.databind.PropertyNamingStrategy;
 import com.fasterxml.jackson.databind.annotation.JsonNaming;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 import lombok.ToString;
 import org.springframework.validation.annotation.Validated;
 
@@ -31,25 +32,36 @@ import java.math.BigDecimal;
 @Data
 @ToString
 @Validated
+@EqualsAndHashCode(callSuper=false)
 @JsonNaming(PropertyNamingStrategy.SnakeCaseStrategy.class)
 public class QrPayInfo extends PayInfo {
-
-    public QrPayInfo(@NotEmpty String outTradeNo, @NotEmpty String subject,
-                     @DecimalMin(inclusive = false, value = "0", message = "金额格式有误") BigDecimal totalAmount
-            , String sellerId, String body, String operatorId
-            , @NotEmpty String storeId, String timeoutExpress
-            , @DecimalMin(inclusive = false, value = "0", message = "金额格式有误") BigDecimal undiscountableAmount
-            , String setSysServiceProviderId) {
-        super(outTradeNo, subject, totalAmount, sellerId, body, operatorId, storeId, timeoutExpress,setSysServiceProviderId);
-        this.undiscountableAmount = undiscountableAmount;
-    }
-
-    public QrPayInfo() {
-    }
 
     //订单不可打折金额（单位：分）
     @DecimalMin(inclusive = false, value = "0", message = "金额格式有误")
     private BigDecimal undiscountableAmount;
 
+
+    public QrPayInfo(@NotEmpty String outTradeNo, @NotEmpty String subject,
+                     @DecimalMin(inclusive = false, value = "0", message = "金额格式有误") BigDecimal totalAmount
+            , String sellerId, String body, String operatorId
+            , @NotEmpty String storeId, String timeoutExpress
+            , String setSysServiceProviderId) {
+        super(outTradeNo, subject, totalAmount, sellerId, body, operatorId, storeId, timeoutExpress,setSysServiceProviderId);
+    }
+
+    public QrPayInfo() {
+    }
+
+    public QrPayInfo(@DecimalMin(inclusive = false, value = "0", message = "金额格式有误") BigDecimal undiscountableAmount) {
+        this.undiscountableAmount = undiscountableAmount;
+    }
+
+    public QrPayInfo(String result_code, String return_msg,
+                     String err_code, String err_code_des,
+                     String trade_state_desc, String trade_state,
+                     @DecimalMin(inclusive = false, value = "0", message = "金额格式有误") BigDecimal undiscountableAmount) {
+        super(result_code, return_msg, err_code, err_code_des, trade_state_desc, trade_state);
+        this.undiscountableAmount = undiscountableAmount;
+    }
 
 }

@@ -73,11 +73,9 @@ public class HelloController {
         return alPayService.tradePay(payInfo);
     }
 
-//要看你是post请求还是get请求，get请求使用@RequestParam修饰Map，post请求使用@RequestBody修饰map或者Object
    //退款
-    @PostMapping (value = "/tradeRefud")
-    //public RefundInfo tradeRefund(@Valid @RequestBody RefundInfo refund ) {
-    public RefundInfo tradeRefund(@RequestParam Map<String, String> refund ) {
+    @PostMapping (value = "/tradeRefud")//RequestParam
+    public Map<String, String>  tradeRefund(@RequestBody Map<String, String> refund ) {
         logger.info("退款"+refund.toString());
         return alPayService.tradeRefund(refund);
     }

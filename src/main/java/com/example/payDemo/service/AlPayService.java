@@ -30,7 +30,7 @@ public interface AlPayService {
 
 
     //退款
-    public RefundInfo tradeRefund( Map<String, String> refund);
+    public Map<String, String>  tradeRefund( Map<String, String> refund);
 
     //查询
     public Map<String, String> tradeQuery(String outTradeNo);

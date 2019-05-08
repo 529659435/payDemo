@@ -35,11 +35,9 @@ import java.math.BigDecimal;
 public class PayInfo {
 
     //商户订单号（需确保唯一性）
-    @NotEmpty
     private String outTradeNo;
 
     //订单标题
-    @NotEmpty
     private  String subject;
 
     //订单总金额（单位：分）
@@ -56,7 +54,6 @@ public class PayInfo {
     private String operatorId;
 
     //商户门店编号
-    @NotEmpty
     private String storeId;
 
     //支付超时时间
@@ -65,9 +62,38 @@ public class PayInfo {
     //系统商编号
     private  String setSysServiceProviderId;
 
-    public PayInfo(@NotEmpty String outTradeNo, @NotEmpty String subject
+    //----------公共出参----------
+    //返回代码
+    private String result_code;
+
+    //当code报错时返回错误原因
+    private String return_msg;
+
+    //错误代码
+    private String err_code;
+
+    //错误消息
+    private String  err_code_des;
+
+    //验证结果（0：成功，1：已验证，2：失败）如验证结果为失败、以下字段为空
+    private String trade_state;
+
+    //验证说明
+    private String  trade_state_desc;
+
+    public PayInfo(String result_code, String return_msg, String err_code,
+                   String err_code_des, String trade_state_desc, String trade_state) {
+        this.result_code = result_code;
+        this.return_msg = return_msg;
+        this.err_code = err_code;
+        this.err_code_des = err_code_des;
+        this.trade_state_desc = trade_state_desc;
+        this.trade_state = trade_state;
+    }
+
+    public PayInfo( String outTradeNo,  String subject
             , @DecimalMin(inclusive = false, value = "0", message = "金额格式有误") BigDecimal totalAmount
-            , String sellerId, String body, String operatorId, @NotEmpty String storeId, String timeoutExpress
+            , String sellerId, String body, String operatorId,  String storeId, String timeoutExpress
             ,String setSysServiceProviderId) {
         this.outTradeNo = outTradeNo;
         this.subject = subject;
@@ -82,5 +108,6 @@ public class PayInfo {
 
     public PayInfo() {
     }
+
 
 }
