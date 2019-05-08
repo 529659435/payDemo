@@ -316,7 +316,7 @@ public class AliPayServiceImpl implements AlPayService {
                 .setGoodsDetailList(goodsDetailList).setTimeoutExpress(timeoutExpress);
         // 调用tradePay方法获取当面付应答
         AlipayF2FPayResult result = tradeService.tradePay(builder);
-        AlipayResponse response = result.getResponse();
+        AlipayTradePayResponse response = result.getResponse();
         //打印日志
         dumpResponse(response);
         //返回结果集
@@ -351,19 +351,19 @@ public class AliPayServiceImpl implements AlPayService {
             case SUCCESS:
                 logger.info("支付宝支付成功");
                 //用户ID
-                resposeMap.put("openid", ((AlipayTradePayResponse) response).getBuyerUserId());
+                resposeMap.put("openid", response.getBuyerUserId());
                 //买家实付金额
-                resposeMap.put("cash_fee", ((AlipayTradePayResponse) response).getBuyerPayAmount());
+                resposeMap.put("cash_fee",  response.getBuyerPayAmount());
                 //支付完成时间-通过查询订单获取
                 //Map<String,String>as =  tradeQuery(payInfo.getOutTradeNo());
                 //  logger.info("支付时间，"+as.get("send_pay_date"));
                 // logger.info("支付时间2，"+((AlipayTradePayResponse) response).getGmtPayment());
                 //logger.info("支付时间3，"+timeResponse(((AlipayTradePayResponse) response).getGmtPayment()));
-                resposeMap.put("time_end", timeResponse(((AlipayTradePayResponse) response).getGmtPayment()));
+                resposeMap.put("time_end", timeResponse(response.getGmtPayment()));
                 //支付订单-返回支付宝流水号
-                resposeMap.put("transaction_id", ((AlipayTradePayResponse) response).getTradeNo());
+                resposeMap.put("transaction_id",  response.getTradeNo());
                 //付款方式
-                resposeMap.put("bank_type", ((AlipayTradePayResponse) response).getFundBillList().get(0).getFundChannel());
+                resposeMap.put("bank_type", response.getFundBillList().get(0).getFundChannel());
                 //验证结果（0：成功，1：已验证，2：失败）如验证结果为失败、以下字段为空
                 resposeMap.put("trade_state", "0");
                 resposeMap.put("trade_state_desc", "支付宝支付成功");
