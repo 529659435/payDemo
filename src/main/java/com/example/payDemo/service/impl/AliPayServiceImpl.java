@@ -288,7 +288,7 @@ public class AliPayServiceImpl implements AlPayService {
         //设定支付超时时间;5分钟
         // 支付超时，线下扫码交易定义为5分钟
         String timeoutExpress = configFile.getZfTimeout();
-
+        //测试
         // 商品明细列表，需填写购买商品详细信息，
         List<GoodsDetail> goodsDetailList = new ArrayList<GoodsDetail>();
         // 创建一个商品信息，参数含义分别为商品id（使用国标）、名称、单价（单位为分）、数量，如果需要添加商品类别，详见GoodsDetail
