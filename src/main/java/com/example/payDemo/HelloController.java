@@ -10,27 +10,16 @@
  */
 package com.example.payDemo;
 
-import com.alipay.api.AlipayApiException;
 import com.example.bean.AlPayInfo;
 import com.example.bean.ConfigFile;
 import com.example.bean.QrPayInfo;
-import com.example.bean.RefundInfo;
-import com.example.demo.Girl;
 import com.example.payDemo.service.AlPayService;
-import lombok.Getter;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.apache.logging.log4j.util.PropertiesUtil;
-import org.apache.tomcat.util.bcel.Const;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpRequest;
 import org.springframework.web.bind.annotation.*;
 
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpSession;
 import javax.validation.Valid;
-import java.text.ParseException;
-import java.util.HashMap;
 import java.util.Map;
 
 import static org.springframework.web.bind.annotation.RequestMethod.POST;
@@ -44,7 +33,7 @@ import static org.springframework.web.bind.annotation.RequestMethod.POST;
  * @since 1.0.0
  */
 @RestController
-@RequestMapping(value = "/alpay")
+@RequestMapping(value = "/alipay")
 public class HelloController {
 
     private static final Logger logger = LogManager.getLogger(HelloController.class);
@@ -59,9 +48,7 @@ public class HelloController {
     @PostMapping(value = "/tradeQrPay")
     public QrPayInfo tradeQrPay(@Valid @RequestBody QrPayInfo qrPayInfo) {
         String path = configFile.getQrFile();
-        //设定支付超时时间;5分钟
-        qrPayInfo.setTimeoutExpress("5m");
-        //alPayService.tradeQrPay(qrPayInfo,path);
+        logger.info("生成二维码支付"+qrPayInfo.toString());
         return alPayService.tradeQrPay(qrPayInfo,path);
     }
 
@@ -88,6 +75,12 @@ public class HelloController {
         logger.info(info);
         return alPayService.tradeQuery(outTradeNo);
     }
+
+    //当面付解码获取UserID
+
+   // public Map<String,String>getUserId()
+
+
 
     //测试
     @RequestMapping(value = "/hello", method = POST)

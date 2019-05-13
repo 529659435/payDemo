@@ -35,6 +35,7 @@ import com.alipay.demo.trade.service.impl.AlipayTradeWithHBServiceImpl;
 import com.alipay.demo.trade.utils.Utils;
 import com.alipay.demo.trade.utils.ZxingUtils;
 import com.example.bean.AlPayInfo;
+import com.example.bean.ConfigFile;
 import com.example.bean.QrPayInfo;
 import com.example.demo.DemoHbRunner;
 import com.example.payDemo.service.AlPayService;
@@ -43,11 +44,17 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.io.File;
-import java.text.SimpleDateFormat;
-import java.util.*;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
 
 /**
  * 〈一句话功能简述〉<br>
@@ -62,6 +69,10 @@ public class AliPayServiceImpl implements AlPayService {
 
     private static final Logger logger = LogManager.getLogger(AliPayServiceImpl.class);
     private static Log log = LogFactory.getLog(AliPayServiceImpl.class);
+
+
+    @Autowired
+    ConfigFile configFile;
 
     // 支付宝当面付2.0服务
     private static AlipayTradeService tradeService;
@@ -87,6 +98,7 @@ public class AliPayServiceImpl implements AlPayService {
                 .setFormat("json").build();
     }
 
+
     // 简单打印应答
     private void dumpResponse(AlipayResponse response) {
         if (response != null) {
@@ -98,12 +110,6 @@ public class AliPayServiceImpl implements AlPayService {
             log.info("body:" + response.getBody());
             log.info("Params:" + response.getParams());
         }
-    }
-
-    // 时间格式转换
-    private String timeResponse(Date time) {
-        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-        return sdf.format(time);
     }
 
 
@@ -181,19 +187,21 @@ public class AliPayServiceImpl implements AlPayService {
         AlipayF2FQueryResult result = tradeService.queryTradeResult(builder);
         AlipayTradeQueryResponse response = result.getResponse();
 
-        treadeMap.put("result_code", response.getCode());
+        treadeMap.put("return_code", response.getCode());
         //当code报错时返回错误原因
         treadeMap.put("return_msg", response.getMsg());
         //错误代码
         treadeMap.put("err_code", response.getSubCode());
         //错误消息
         treadeMap.put("err_code_des", response.getSubMsg());
-        treadeMap.put("trade_state", "2");
+        treadeMap.put("result_code", "FAIL");
+        treadeMap.put("trade_state", "FAIL");
         switch (result.getTradeStatus()) {
             case SUCCESS:
                 log.info("查询返回该订单支付成功: )");
                 dumpResponse(response);
-                treadeMap.put("trade_state", "0");
+                treadeMap.put("result_code", "SUCCESS");
+                treadeMap.put("trade_state", "SUCCESS");
                 treadeMap.put("trade_state_desc", "查询返回该订单支付成功: )");
                 treadeMap.put("buyer_logon_id", response.getBuyerLogonId());
                 treadeMap.put("buyer_pay_amount", response.getBuyerPayAmount());
@@ -204,7 +212,7 @@ public class AliPayServiceImpl implements AlPayService {
                 treadeMap.put("trade_no", response.getTradeNo());
                 treadeMap.put("out_trade_no", response.getOutTradeNo());
                 //时间格式转换
-                treadeMap.put("send_pay_date", timeResponse(response.getSendPayDate()));
+                treadeMap.put("send_pay_date", Utils.toDate(response.getSendPayDate()));
                 log.info(response.getTradeStatus());
                 if (Utils.isListNotEmpty(response.getFundBillList())) {
                     for (TradeFundBill bill : response.getFundBillList()) {
@@ -235,7 +243,6 @@ public class AliPayServiceImpl implements AlPayService {
     public Map<String, String> tradePay(AlPayInfo payInfo) {
         // (必填) 商户网站订单系统中唯一订单号，64个字符以内，只能包含字母、数字、下划线，
         // 需保证商户系统端不能重复，建议通过数据库sequence生成，
-
         String outTradeNo = payInfo.getOutTradeNo();
         /* String outTradeNo = "tradepay" + System.currentTimeMillis()
                 + (long) (Math.random() * 10000000L);*/
@@ -245,7 +252,9 @@ public class AliPayServiceImpl implements AlPayService {
 
         // (必填) 订单总金额，单位为元，不能超过1亿元
         // 如果同时传入了【打折金额】,【不可打折金额】,【订单总金额】三者,则必须满足如下条件:【订单总金额】=【打折金额】+【不可打折金额】
-        String totalAmount = payInfo.getTotalFee().toString();
+        BigDecimal jAmount = payInfo.getTotalFee().divide(new BigDecimal(100), 2, RoundingMode.HALF_UP);//分转元
+        String totalAmount = jAmount.toString();
+
 
         // (必填) 付款条码，用户支付宝钱包手机app点击“付款”产生的付款条码
         String authCode = payInfo.getAuthCode(); // 条码示例，286648048691290423
@@ -272,19 +281,22 @@ public class AliPayServiceImpl implements AlPayService {
         String storeId = payInfo.getStoreId();
 
         // 业务扩展参数，目前可添加由支付宝分配的系统商编号(通过setSysServiceProviderId方法)，详情请咨询支付宝技术支持
-        String providerId = "";
+        String providerId = "DYNAMIC_TOKEN_OUT_BIZ_NO";
         ExtendParams extendParams = new ExtendParams();
         extendParams.setSysServiceProviderId(providerId);
 
+        //设定支付超时时间;5分钟
         // 支付超时，线下扫码交易定义为5分钟
-        String timeoutExpress = "5m";
+        String timeoutExpress = configFile.getZfTimeout();
 
         // 商品明细列表，需填写购买商品详细信息，
         List<GoodsDetail> goodsDetailList = new ArrayList<GoodsDetail>();
         // 创建一个商品信息，参数含义分别为商品id（使用国标）、名称、单价（单位为分）、数量，如果需要添加商品类别，详见GoodsDetail
-        GoodsDetail goods1 = GoodsDetail.newInstance(payInfo.getProductId(), subject, Long.parseLong(totalAmount), 1);
+        Long price = Long.valueOf(payInfo.getTotalFee().toString());
+        GoodsDetail goods1 = GoodsDetail.newInstance(payInfo.getProductId(), subject, price, 1);
         // 创建好一个商品后添加至商品明细列表
         goodsDetailList.add(goods1);
+
 
         String appAuthToken = "应用授权令牌";//根据真实值填写
 
@@ -319,16 +331,34 @@ public class AliPayServiceImpl implements AlPayService {
         AlipayTradePayResponse response = result.getResponse();
         //打印日志
         dumpResponse(response);
+        //解析字符串
+   /*     String as = response.getBody();
+        Map<String, Object> map = new HashMap<String, Object>();
+        Map<String, Object> map1 = new HashMap<String, Object>();
+        JSONObject jasonObject = JSONObject.fromObject(as);
+        map = (Map)jasonObject;
+        Object asa="";
+        map.remove("sign");
+        for (Map.Entry<String, Object> entry : map.entrySet()) {
+            System.out.println("key= " + entry.getKey() + " and value= "+ entry.getValue());
+            asa = entry.getValue();
+        }
+        jasonObject = JSONObject.fromObject(asa);
+        map1 = (Map)jasonObject;
+        System.out.println(map1.get("send_pay_date"));*/
+
+
         //返回结果集
         Map<String, String> resposeMap = new HashMap<>();
         //返回代码
-        resposeMap.put("result_code", response.getCode());
+        resposeMap.put("return_code", response.getCode());
         //当code报错时返回错误原因
         resposeMap.put("return_msg", response.getMsg());
         //错误代码
         resposeMap.put("err_code", response.getSubCode());
         //错误消息
         resposeMap.put("err_code_des", response.getSubMsg());
+        //商户号
         resposeMap.put("sub_mch_id", payInfo.getSubMchId());
         //货币类型
         resposeMap.put("fee_type", payInfo.getFeeType());
@@ -344,28 +374,31 @@ public class AliPayServiceImpl implements AlPayService {
         resposeMap.put("out_trade_no", payInfo.getOutTradeNo());
         //应结订单金额
         resposeMap.put("settlement_total_fee", payInfo.getFeeType());
-        //交易类型-条码支付
+        //交易类型-条码支付 微信返回MICROPAY 付款码支付
         resposeMap.put("trade_type", "bar_code");
-        resposeMap.put("trade_state", "2");
+        resposeMap.put("result_code", "FAIL");
+        resposeMap.put("trade_state", "FAIL");
         switch (result.getTradeStatus()) {
             case SUCCESS:
                 logger.info("支付宝支付成功");
                 //用户ID
                 resposeMap.put("openid", response.getBuyerUserId());
                 //买家实付金额
-                resposeMap.put("cash_fee",  response.getBuyerPayAmount());
+                resposeMap.put("cash_fee", response.getBuyerPayAmount());
                 //支付完成时间-通过查询订单获取
-                //Map<String,String>as =  tradeQuery(payInfo.getOutTradeNo());
-                //  logger.info("支付时间，"+as.get("send_pay_date"));
+                Map<String, String> tradeQueryMap = tradeQuery(payInfo.getOutTradeNo());
+                logger.info("支付时间，" + tradeQueryMap.get("send_pay_date"));
+
                 // logger.info("支付时间2，"+((AlipayTradePayResponse) response).getGmtPayment());
-                //logger.info("支付时间3，"+timeResponse(((AlipayTradePayResponse) response).getGmtPayment()));
-                resposeMap.put("time_end", timeResponse(response.getGmtPayment()));
+                //logger.info("支付时间3，"+timeResponse(response.getGmtPayment()));
+                resposeMap.put("time_end", tradeQueryMap.get("send_pay_date"));
                 //支付订单-返回支付宝流水号
-                resposeMap.put("transaction_id",  response.getTradeNo());
+                resposeMap.put("transaction_id", response.getTradeNo());
                 //付款方式
                 resposeMap.put("bank_type", response.getFundBillList().get(0).getFundChannel());
                 //验证结果（0：成功，1：已验证，2：失败）如验证结果为失败、以下字段为空
-                resposeMap.put("trade_state", "0");
+                resposeMap.put("result_code", "SUCCESS");
+                resposeMap.put("trade_state", "SUCCESS");
                 resposeMap.put("trade_state_desc", "支付宝支付成功");
                 break;
             case FAILED:
@@ -428,7 +461,7 @@ public class AliPayServiceImpl implements AlPayService {
         extendParams.setSysServiceProviderId(qrPayInfo.getSetSysServiceProviderId());
 
         // 支付超时，定义为120分钟
-        String timeoutExpress = qrPayInfo.getTimeoutExpress();
+        String timeoutExpress = configFile.getQrTimeout();
 
         // 商品明细列表，需填写购买商品详细信息，
         List<GoodsDetail> goodsDetailList = new ArrayList<GoodsDetail>();

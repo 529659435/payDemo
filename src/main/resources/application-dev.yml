@@ -16,3 +16,6 @@ girl:
 
 filepath:
  qrFile: E:\\files\\ZhbQr 
+#\u652F\u4ED8\u8D85\u65F6\u65F6\u95F4
+ zfTimeout: 10m 
+ qrTimeout: 5m 

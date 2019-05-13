@@ -33,6 +33,15 @@ import org.springframework.validation.annotation.Validated;
 @ConfigurationProperties(prefix = "filepath")
 public class ConfigFile {
 
+    //二维码保存路径
     private  String qrFile;
+
+    //二维码支付超时时间
+    private String qrTimeout;
+
+    //支付超时时间
+    private String zfTimeout;
+
+
 
 }

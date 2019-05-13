@@ -20,6 +20,7 @@ import org.springframework.validation.annotation.Validated;
 
 import javax.validation.constraints.DecimalMin;
 import javax.validation.constraints.NotEmpty;
+import javax.validation.constraints.NotNull;
 import java.math.BigDecimal;
 
 /**
@@ -79,7 +80,8 @@ public class AlPayInfo {
     private String feeType= "CNY";
 
     //交易金额（单位：分）
-    @DecimalMin(inclusive=false,value="0",message="金额格式有误")
+    @NotNull
+    @DecimalMin(inclusive = false,value="0",message="金额格式有误")
     private BigDecimal totalFee;
 
     //交易开始时间
